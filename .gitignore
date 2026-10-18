@@ -1,0 +1,7 @@
+bd_keygen_server.log
+bd_keygen_server.log.*
+copy_entitlements.plist
+backup/
+__pycache__/
+*.pyc
+.DS_Store
