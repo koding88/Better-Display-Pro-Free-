@@ -62,12 +62,21 @@ def signed_envelope(response, cfg):
     }
 
 
-def activation_object(cfg):
+def activation_object(cfg, license_key=None):
+    """Shape of a real Paddle v3.2 activation record.
+
+    Extra fields matter: the app gates Pro features on the activation carrying
+    a licence key / e-mail, not merely on `activated == true`.
+    """
     return {
         "product_id": str(cfg.get("product_id", "762421")),
         "activation_id": str(cfg.get("activation_id", "123456")),
         "type": str(cfg.get("license_type", "activation_license")),
+        "license_key": license_key or "BETTER-DISPLAY-KEYGEN-0001",
+        "activation_email": str(cfg.get("activation_email", "panda@example.com")),
+        "activation_date": "2026-10-23 02:44:17",
         "expires": False,
+        "quantity": 1,
     }
 
 
@@ -125,9 +134,9 @@ class Handler(BaseHTTPRequestHandler):
 
         response = {}
         if parsed.path.endswith("license/activate"):
-            response = activation_object(cfg)
+            response = activation_object(cfg, form.get("license_key"))
         elif parsed.path.endswith("license/verify"):
-            response = activation_object(cfg)
+            response = activation_object(cfg, form.get("license_key"))
         elif parsed.path.endswith("license/activations"):
             response = activation_list(cfg, form.get("license_key"))
         elif parsed.path.endswith("license/deactivate"):

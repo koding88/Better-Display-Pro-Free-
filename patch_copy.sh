@@ -53,6 +53,20 @@ rm -f "$TMP_PREFS"
 echo "→ patch binaries"
 python3 "$WS/patch_binary.py" "$DST"
 
+echo "→ build + inject anti-tamper neutraliser (libbdfree.dylib via Sparkle)"
+# The loader dylib is loaded as a *declared* dependency (through Sparkle) so the
+# app's anti-injection does not flag it.  Its constructor installs the selective
+# hook on the Pro gate, patches the Sec* binding slots, and swizzles
+# +[NSThread sleepForTimeInterval:] on the main thread to remove the beachball.
+# See docs/anti-tamper-analysis.md.
+LOADER_OUT="$DST/Contents/Frameworks/libbdfree.dylib"
+clang -dynamiclib -arch arm64 -arch x86_64 -framework Foundation -framework Security \
+  -install_name @rpath/libbdfree.dylib -o "$LOADER_OUT" \
+  "$WS/loader/fishhook.c" "$WS/loader/libbdfree.m" "$WS/loader/hook.S"
+python3 "$WS/inject_dylib.py" \
+  "$DST/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+  "@rpath/libbdfree.dylib"
+
 echo "→ re-sign ad-hoc"
 cat > "$WS/copy_entitlements.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -67,9 +81,11 @@ cat > "$WS/copy_entitlements.plist" <<'EOF'
 </plist>
 EOF
 
+codesign --force --sign - "$LOADER_OUT" 2>&1 | tail -1
 codesign --force --sign - "$DST/Contents/Frameworks/Paddle.framework" 2>&1 | tail -2
+codesign --force --sign - "$DST/Contents/Frameworks/Sparkle.framework" 2>&1 | tail -1
 codesign --force --deep --sign - --entitlements "$WS/copy_entitlements.plist" \
-  --options runtime "$DST" 2>&1 | tail -2
+  "$DST" 2>&1 | tail -2
 codesign --verify --deep --strict "$DST"
 echo "OK — patched copy ready: $DST"
 echo "     Run: ./keygen.command"
